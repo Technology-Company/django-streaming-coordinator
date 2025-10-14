@@ -1,0 +1,24 @@
+[project]
+name = "django-streaming-coordinator"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Justus Hämäläinen",email = "justushamalainen@gmail.com"}
+]
+readme = "README.md"
+requires-python = "^3.11"
+dependencies = [
+    "django (>=5.2.7,<6.0.0)",
+    "asgineer (>=0.9.4,<0.10.0)",
+    "uvicorn (>=0.37.0,<0.38.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.group.dev.dependencies]
+httpx = "^0.28.1"
+httpx-sse = "^0.4.3"
+
