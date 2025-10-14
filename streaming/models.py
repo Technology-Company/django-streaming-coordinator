@@ -106,14 +106,12 @@ class ExampleTask(StreamTask):
             })
 
 
-        final_result = {
+        await self.send_event('complete', {
             'message': 'Task completed successfully',
-            'total_steps': 3,
-            'completed': True
-        }
-        await self.send_event('complete', final_result)
+            'total_steps': 3
+        })
 
-        return final_result
+        return f"Completed processing: {self.message}"
 
 
 class ContinueTask(StreamTask):
@@ -148,17 +146,13 @@ class ContinueTask(StreamTask):
             iteration += 1
 
         if iteration >= max_iterations:
-            final_result = {
-                'message': 'Timeout waiting for continue signal',
-                'timed_out': True
-            }
-            await self.send_event('timeout', final_result)
-            return final_result
+            await self.send_event('timeout', {
+                'message': 'Timeout waiting for continue signal'
+            })
+            return "Timeout - continue signal not received"
         else:
 
-            final_result = {
-                'message': 'Task completed successfully',
-                'continue_received': True
-            }
-            await self.send_event('complete', final_result)
-            return final_result
+            await self.send_event('complete', {
+                'message': 'Task completed successfully'
+            })
+            return "Continue signal received - task completed"
