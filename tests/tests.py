@@ -29,7 +29,7 @@ class StreamingSystemTests(TransactionTestCase):
 
         try:
             for _ in range(5):
-                event = await asyncio.wait_for(queue.get(), timeout=10)
+                event = await asyncio.wait_for(queue.get(), timeout=0.1)
                 events.append(event)
         except asyncio.TimeoutError:
             pass
@@ -69,8 +69,8 @@ class StreamingSystemTests(TransactionTestCase):
         task_coro = asyncio.create_task(task.process())
 
 
-        event1 = await asyncio.wait_for(queue1.get(), timeout=5)
-        event2 = await asyncio.wait_for(queue2.get(), timeout=5)
+        event1 = await asyncio.wait_for(queue1.get(), timeout=0.1)
+        event2 = await asyncio.wait_for(queue2.get(), timeout=0.1)
 
 
         self.assertEqual(event1['type'], event2['type'])
@@ -79,6 +79,44 @@ class StreamingSystemTests(TransactionTestCase):
 
 
         await task_coro
+
+    async def test_slow_client_does_not_block_system(self):
+        """Test that a slow/non-consuming client doesn't block the task or other clients"""
+        task = await ExampleTask.objects.acreate(message="Slow client test")
+
+        # Create two clients
+        queue1 = asyncio.Queue()  # Fast client - will consume events
+        queue2 = asyncio.Queue()  # Slow client - will NOT consume events
+
+        await task.add_client(queue1)
+        await task.add_client(queue2)
+
+        # Start task processing
+        task_coro = asyncio.create_task(task.process())
+
+        # Only consume from queue1, leaving queue2 full
+        events_from_fast_client = []
+        try:
+            for _ in range(5):
+                event = await asyncio.wait_for(queue1.get(), timeout=0.1)
+                events_from_fast_client.append(event)
+        except asyncio.TimeoutError:
+            pass
+
+        # Wait for task to complete
+        await task_coro
+
+        # Verify fast client received all events
+        self.assertEqual(len(events_from_fast_client), 5)
+        self.assertEqual(events_from_fast_client[0]['type'], 'start')
+        self.assertEqual(events_from_fast_client[-1]['type'], 'complete')
+
+        # Verify slow client's queue has events (but we didn't consume them)
+        self.assertFalse(queue2.empty(), "Slow client queue should have unconsumed events")
+
+        # Verify the slow client received events by checking queue size
+        queue2_size = queue2.qsize()
+        self.assertGreater(queue2_size, 0, "Slow client should have received events")
 
     async def test_new_client_gets_latest_data(self):
 
@@ -91,17 +129,17 @@ class StreamingSystemTests(TransactionTestCase):
         task_coro = asyncio.create_task(task.process())
 
 
-        await asyncio.wait_for(queue1.get(), timeout=5)
+        await asyncio.wait_for(queue1.get(), timeout=0.1)
 
 
-        await asyncio.sleep(2.5)
+        await asyncio.sleep(0.03)
 
 
         queue2 = asyncio.Queue()
         await task.add_client(queue2)
 
 
-        latest_event = await asyncio.wait_for(queue2.get(), timeout=5)
+        latest_event = await asyncio.wait_for(queue2.get(), timeout=0.1)
         self.assertEqual(latest_event['type'], 'progress')
         self.assertGreaterEqual(latest_event['data']['step'], 1)
 
@@ -121,7 +159,7 @@ class StreamingSystemTests(TransactionTestCase):
         self.assertTrue(coordinator.is_task_running(app_name, model_name, task.pk))
 
 
-        await asyncio.sleep(7)
+        await asyncio.sleep(0.05)
 
 
         self.assertFalse(coordinator.is_task_running(app_name, model_name, task.pk))
@@ -141,13 +179,13 @@ class StreamingSystemTests(TransactionTestCase):
         await coordinator.start_task(task, 'tests', 'ExampleTask')
 
 
-        await asyncio.wait_for(queue.get(), timeout=5)
+        await asyncio.wait_for(queue.get(), timeout=0.1)
 
 
         await task.remove_client(queue)
 
 
-        await asyncio.sleep(7)
+        await asyncio.sleep(0.05)
 
 
         await task.arefresh_from_db()
@@ -167,7 +205,7 @@ class StreamingSystemTests(TransactionTestCase):
         await coordinator.start_task(task, 'tests', 'ContinueTask')
 
 
-        event1_1 = await asyncio.wait_for(queue1.get(), timeout=5)
+        event1_1 = await asyncio.wait_for(queue1.get(), timeout=0.1)
         self.assertEqual(event1_1['type'], 'started')
         self.assertEqual(event1_1['data']['message'], "Multi-client continue test")
         self.assertEqual(event1_1['data']['continue'], False)
@@ -177,7 +215,7 @@ class StreamingSystemTests(TransactionTestCase):
         await task.add_client(queue2)
 
 
-        event2_1 = await asyncio.wait_for(queue2.get(), timeout=5)
+        event2_1 = await asyncio.wait_for(queue2.get(), timeout=0.1)
         self.assertEqual(event2_1['type'], 'started')
         self.assertEqual(event2_1['data']['message'], "Multi-client continue test")
         self.assertEqual(event2_1['data']['continue'], False)
@@ -188,11 +226,11 @@ class StreamingSystemTests(TransactionTestCase):
 
 
 
-        await asyncio.sleep(0.6)
+        await asyncio.sleep(0.06)
 
 
-        event1_2 = await asyncio.wait_for(queue1.get(), timeout=5)
-        event2_2 = await asyncio.wait_for(queue2.get(), timeout=5)
+        event1_2 = await asyncio.wait_for(queue1.get(), timeout=0.1)
+        event2_2 = await asyncio.wait_for(queue2.get(), timeout=0.1)
 
 
         self.assertEqual(event1_2['type'], 'final')
@@ -204,8 +242,8 @@ class StreamingSystemTests(TransactionTestCase):
         self.assertEqual(event2_2['data']['continue'], True)
 
 
-        event1_3 = await asyncio.wait_for(queue1.get(), timeout=5)
-        event2_3 = await asyncio.wait_for(queue2.get(), timeout=5)
+        event1_3 = await asyncio.wait_for(queue1.get(), timeout=0.1)
+        event2_3 = await asyncio.wait_for(queue2.get(), timeout=0.1)
 
         self.assertEqual(event1_3['type'], 'complete')
         self.assertEqual(event1_3['data']['message'], 'Task completed successfully')
@@ -214,7 +252,7 @@ class StreamingSystemTests(TransactionTestCase):
         self.assertEqual(event2_3['data']['message'], 'Task completed successfully')
 
 
-        await asyncio.sleep(1)
+        await asyncio.sleep(0.05)
 
 
         await task.arefresh_from_db()
@@ -243,7 +281,18 @@ class HTTPSSEEndpointTests(TransactionTestCase):
             env=env
         )
 
-        time.sleep(3)
+        # Wait for server to be ready by polling health endpoint
+        import httpx
+        max_attempts = 50
+        for i in range(max_attempts):
+            try:
+                response = httpx.get('http://127.0.0.1:8888/health', timeout=0.1)
+                if response.status_code == 200:
+                    break
+            except (httpx.ConnectError, httpx.ReadTimeout):
+                if i == max_attempts - 1:
+                    raise
+                time.sleep(0.1)
 
     @classmethod
     def tearDownClass(cls):
@@ -289,7 +338,7 @@ class HTTPSSEEndpointTests(TransactionTestCase):
 
         # Start and wait for task to complete
         await coordinator.start_task(task, 'tests', 'ExampleTask')
-        await asyncio.sleep(8)  # Wait for task to complete (6s + buffer)
+        await asyncio.sleep(0.05)  # Wait for task to complete
 
         # Request the completed task
         async with httpx.AsyncClient() as client:
@@ -312,7 +361,7 @@ class HTTPSSEEndpointTests(TransactionTestCase):
 
     async def test_multiple_concurrent_sse_connections(self):
         # Use sync create to ensure task is visible to subprocess
-        task = await ExampleTask.objects.create(message="Multi-connection test")
+        task = await ExampleTask.objects.acreate(message="Multi-connection test")
         # Don't start task manually - let coordinator start it when first client connects
         async def collect_events(client_id):
             events = []

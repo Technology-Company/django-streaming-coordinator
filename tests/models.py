@@ -14,7 +14,7 @@ class ExampleTask(StreamTask):
 
         for i in range(1, 4):
 
-            await asyncio.sleep(2)
+            await asyncio.sleep(0.01)
 
 
             await self.send_event('progress', {
@@ -61,7 +61,7 @@ class ContinueTask(StreamTask):
                 break
 
 
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.05)
             iteration += 1
 
         if iteration >= max_iterations:
