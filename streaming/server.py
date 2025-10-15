@@ -89,20 +89,20 @@ async def stream_handler(request):
 
 
 async def health_check(request):
-    
+
     if request.path == '/health':
         return 200, {'Content-Type': 'text/plain'}, "OK"
     return None
 
 
 async def main_handler(request):
-    
-    
+
+
     health_response = await health_check(request)
     if health_response:
         return health_response
 
-    
+
     if request.path.startswith('/stream/'):
         return await stream_handler(request)
 

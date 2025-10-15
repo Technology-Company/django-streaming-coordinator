@@ -1,6 +1,7 @@
 import asyncio
 import json
 from abc import ABCMeta, abstractmethod
+from typing import AsyncGenerator, Generator, Any
 from django.db import models
 from django.utils import timezone
 
@@ -82,3 +83,35 @@ class StreamTask(models.Model, metaclass=StreamTaskMeta):
         self.completed_at = timezone.now()
         self.final_value = final_value
         await self.asave(update_fields=['completed_at', 'final_value', 'updated_at'])
+
+    async def process_generator(self, generator: AsyncGenerator[dict, None]) -> Any:
+        """
+        Process an async generator, sending each yielded value as an event.
+
+        Args:
+            generator: An async generator that yields dict values
+
+        Returns:
+            The final value (last yielded value or None)
+        """
+        final_value = None
+        async for value in generator:
+            await self.send_event('progress', value)
+            final_value = value
+        return final_value
+
+    async def process_sync_generator(self, generator: Generator[dict, None, None]) -> Any:
+        """
+        Process a sync generator, sending each yielded value as an event.
+
+        Args:
+            generator: A sync generator that yields dict values
+
+        Returns:
+            The final value (last yielded value or None)
+        """
+        final_value = None
+        for value in generator:
+            await self.send_event('progress', value)
+            final_value = value
+        return final_value

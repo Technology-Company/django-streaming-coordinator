@@ -7,7 +7,11 @@ A Django-based system for managing long-running tasks with Server-Sent Events (S
 - **Persistent Tasks**: Tasks continue running in the background even when clients disconnect
 - **Multiple Clients**: Multiple clients can connect to the same task and receive real-time updates
 - **Server-Sent Events (SSE)**: Uses SSE for efficient real-time streaming
-- **Easy Task Creation**: Simple API for creating custom streaming tasks
+- **Easy Task Creation**: Simple API for creating custom streaming tasks via HTTP or programmatically
+- **Client Library**: Built-in httpx-based client for easy task creation and management
+- **Generator Support**: Process sync and async generators with automatic event streaming
+- **HTTP Integration**: Use httpx to fetch data from APIs within tasks
+- **Shared Client**: Single httpx client per process for efficient connection pooling
 - **Unix Socket Support**: Can bind to Unix sockets or TCP ports
 - **Async/Await**: Built on modern Python asyncio for efficient concurrent operations
 
@@ -69,20 +73,22 @@ poetry run python manage.py runserver_stream --host 127.0.0.1 --port 8888
 poetry run python manage.py runserver_stream --socket /tmp/my-stream.sock
 ```
 
-### 3. Create and Connect to a Task
+### 3. Create and Start a Task
+
+Tasks are created through Django ORM and started with the coordinator:
 
 ```python
-# Create a task instance
-from streaming.models import ExampleTask
+from tests.models import ExampleTask
 from streaming.coordinator import coordinator
 
-task = ExampleTask.objects.create(message="Hello, World!")
+# Create the task
+task = await ExampleTask.objects.acreate(message="Hello, World!")
 
 # Start the task (will run in background)
-await coordinator.start_task(task, 'ExampleTask')
+await coordinator.start_task(task, 'tests', 'ExampleTask')
 
-# Connect via HTTP SSE
-# GET /stream/ExampleTask/{task_id}
+# Clients can now connect via HTTP SSE
+# GET /stream/tests/ExampleTask/{task.pk}
 ```
 
 ### 4. Connect from Client
@@ -136,6 +142,27 @@ async with httpx.AsyncClient() as client:
 
 ## API
 
+### Client API
+
+The library provides a shared httpx client for efficient HTTP requests.
+
+#### `get_client(base_url="http://127.0.0.1:8888")`
+Get the shared httpx client instance (singleton) for efficient connection pooling across your entire process.
+
+**Example:**
+```python
+from streaming import get_client
+
+client = get_client()
+
+# Use the shared httpx client for any HTTP requests
+response = await client.async_client.get("https://api.example.com/data")
+data = response.json()
+
+# Or use synchronously
+response = client.sync_client.get("https://api.example.com/data")
+```
+
 ### StreamTask Model
 
 Base abstract model for all streaming tasks.
@@ -144,6 +171,7 @@ Base abstract model for all streaming tasks.
 - `created_at`: Timestamp when task was created
 - `updated_at`: Timestamp when task was last updated
 - `completed_at`: Timestamp when task completed (null if not completed)
+- `final_value`: JSONField storing the final return value from process()
 
 **Methods:**
 
@@ -166,8 +194,41 @@ await self.send_event('progress', {
 #### `async process()`
 Override this method to implement your task logic. This is where your task's work happens.
 
-#### `async mark_completed()`
+#### `async mark_completed(final_value=None)`
 Mark the task as completed. Called automatically by the coordinator when `process()` finishes.
+
+#### `async process_generator(generator: AsyncGenerator[dict, None])`
+Process an async generator, automatically sending each yielded value as a progress event.
+
+**Example:**
+```python
+async def process(self):
+    async def my_generator():
+        for i in range(10):
+            await asyncio.sleep(0.1)
+            yield {'step': i, 'message': f'Step {i}'}
+
+    await self.send_event('start', {})
+    final = await self.process_generator(my_generator())
+    await self.send_event('complete', {})
+    return final
+```
+
+#### `async process_sync_generator(generator: Generator[dict, None, None])`
+Process a sync generator, automatically sending each yielded value as a progress event.
+
+**Example:**
+```python
+async def process(self):
+    def my_generator():
+        for i in range(10):
+            yield {'step': i, 'message': f'Step {i}'}
+
+    await self.send_event('start', {})
+    final = await self.process_sync_generator(my_generator())
+    await self.send_event('complete', {})
+    return final
+```
 
 ### TaskCoordinator
 
@@ -186,19 +247,28 @@ Check if a task is currently running.
 
 ## HTTP Endpoints
 
-### `GET /stream/{model_name}/{task_id}`
+### `GET /stream/{app_name}/{model_name}/{task_id}`
 Connect to a task's SSE stream.
 
-**Response Format:**
+**Response Format (if task is running):**
 ```
 event: start
-data: {"message": "...", "_task_id": 1, "_model": "ExampleTask", "_timestamp": "..."}
+data: {"message": "...", "_task_id": 1, "_app": "tests", "_model": "ExampleTask", "_timestamp": "..."}
 
 event: progress
-data: {"step": 1, "total": 3, "_task_id": 1, "_model": "ExampleTask", "_timestamp": "..."}
+data: {"step": 1, "total": 3, "_task_id": 1, "_app": "tests", "_model": "ExampleTask", "_timestamp": "..."}
 
 event: complete
-data: {"message": "...", "_task_id": 1, "_model": "ExampleTask", "_timestamp": "..."}
+data: {"message": "...", "_task_id": 1, "_app": "tests", "_model": "ExampleTask", "_timestamp": "..."}
+```
+
+**Response Format (if task is completed):**
+```json
+{
+  "status": "completed",
+  "final_value": "...",
+  "completed_at": "2025-01-15T12:34:56.789Z"
+}
 ```
 
 ### `GET /health`
@@ -225,6 +295,95 @@ poetry run python manage.py test --verbosity=2
 2. **TaskCoordinator**: Singleton that manages task lifecycle and keeps tasks running
 3. **SSE Server**: asgineer-based ASGI server that handles HTTP SSE connections
 4. **Management Command**: `runserver_stream` to start the server on Unix socket or TCP port
+
+## Advanced Examples
+
+### Using Async Generators
+
+Process data streams with automatic event emission:
+
+```python
+from streaming import StreamTask
+
+class AsyncGeneratorTask(StreamTask):
+    count = models.IntegerField(default=5)
+
+    async def process(self):
+        async def progress_generator():
+            for i in range(self.count):
+                await asyncio.sleep(0.1)
+                yield {
+                    'step': i + 1,
+                    'total': self.count,
+                    'percentage': ((i + 1) / self.count) * 100
+                }
+
+        await self.send_event('start', {'total_steps': self.count})
+        final = await self.process_generator(progress_generator())
+        await self.send_event('complete', {'message': 'Done'})
+        return final
+```
+
+### Using Sync Generators
+
+Process data with regular (non-async) generators:
+
+```python
+from streaming import StreamTask
+
+class SyncGeneratorTask(StreamTask):
+    items = models.JSONField(default=list)
+
+    async def process(self):
+        def item_processor():
+            for idx, item in enumerate(self.items):
+                yield {
+                    'index': idx,
+                    'item': item,
+                    'processed': f'Processed: {item}'
+                }
+
+        await self.send_event('start', {'total_items': len(self.items)})
+        final = await self.process_sync_generator(item_processor())
+        await self.send_event('complete', {})
+        return final
+```
+
+### Using httpx to Fetch Data
+
+Make HTTP requests within tasks:
+
+```python
+import httpx
+from streaming import StreamTask
+
+class HttpxFetchTask(StreamTask):
+    url = models.URLField()
+
+    async def process(self):
+        await self.send_event('start', {'url': self.url})
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            await self.send_event('progress', {
+                'status': 'fetching',
+                'message': f'Fetching from {self.url}'
+            })
+
+            response = await client.get(self.url)
+            response.raise_for_status()
+            data = response.json()
+
+            await self.send_event('progress', {
+                'status': 'fetched',
+                'status_code': response.status_code
+            })
+
+            await self.send_event('complete', {
+                'message': 'Data fetched successfully'
+            })
+
+            return data
+```
 
 ## Example: ExampleTask
 

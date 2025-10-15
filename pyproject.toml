@@ -1,24 +1,49 @@
 [project]
 name = "django-streaming-coordinator"
 version = "0.1.0"
-description = ""
+description = "A Django-based system for managing long-running tasks with Server-Sent Events (SSE) streaming"
 authors = [
-    {name = "Justus Hämäläinen",email = "justushamalainen@gmail.com"}
+    {name = "Justus Hämäläinen", email = "justushamalainen@gmail.com"}
 ]
 readme = "README.md"
-requires-python = "^3.11"
+requires-python = ">=3.11"
+license = "MIT"
+keywords = ["django", "sse", "server-sent-events", "streaming", "async", "tasks", "background-tasks"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: Django",
+    "Framework :: Django :: 5.2",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = [
-    "django (>=5.2.7,<6.0.0)",
-    "asgineer (>=0.9.4,<0.10.0)",
-    "uvicorn (>=0.37.0,<0.38.0)"
+    "django>=5.2.7,<6.0.0",
+    "asgineer>=0.9.4,<0.10.0",
+    "uvicorn>=0.37.0,<0.38.0",
+    "httpx>=0.28.1,<0.29.0",
 ]
 
+[project.urls]
+Homepage = "https://github.com/Technology-Company/django-streaming-coordinator"
+Repository = "https://github.com/Technology-Company/django-streaming-coordinator"
+Documentation = "https://github.com/Technology-Company/django-streaming-coordinator#readme"
+Issues = "https://github.com/Technology-Company/django-streaming-coordinator/issues"
 
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
 
-[tool.poetry.group.dev.dependencies]
-httpx = "^0.28.1"
-httpx-sse = "^0.4.3"
+[tool.setuptools.packages.find]
+include = ["streaming*"]
+
+[tool.setuptools.package-data]
+streaming = [
+    "migrations/*.py",
+    "management/commands/*.py",
+]
 
