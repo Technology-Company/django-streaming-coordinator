@@ -21,21 +21,22 @@ class TaskCoordinator:
         self._locks: Dict[str, asyncio.Lock] = {}  
         self._initialized = True
 
-    def get_task_key(self, model_name: str, task_id: int) -> str:
-        
-        return f"{model_name}:{task_id}"
+    def get_task_key(self, app_name: str, model_name: str, task_id: int) -> str:
 
-    async def start_task(self, task_instance: 'StreamTask', model_name: str) -> None:
+        return f"{app_name}:{model_name}:{task_id}"
+
+    async def start_task(self, task_instance: 'StreamTask', app_name: str, model_name: str) -> None:
         """
         Start a task if not already running.
 
         Args:
             task_instance: The StreamTask instance to run
+            app_name: The name of the app (for lookups)
             model_name: The name of the model (for lookups)
 
         Note: No lock needed - all operations are atomic (no await statements).
         """
-        task_key = self.get_task_key(model_name, task_instance.pk)
+        task_key = self.get_task_key(app_name, model_name, task_instance.pk)
 
         
         
@@ -70,7 +71,7 @@ class TaskCoordinator:
             if task_key in self._locks:
                 del self._locks[task_key]
 
-    async def get_task_instance(self, model_name: str, task_id: int) -> Optional['StreamTask']:
+    async def get_task_instance(self, app_name: str, model_name: str, task_id: int) -> Optional['StreamTask']:
         """
         Get a running task instance or load it from the database.
 
@@ -82,52 +83,51 @@ class TaskCoordinator:
         different Python objects for the same database record.
 
         Args:
+            app_name: The name of the app
             model_name: The name of the model
             task_id: The task ID
 
         Returns:
             StreamTask instance or None if not found
         """
-        task_key = self.get_task_key(model_name, task_id)
+        task_key = self.get_task_key(app_name, model_name, task_id)
 
-        
+
         if task_key in self._task_instances:
             return self._task_instances[task_key]
 
-        
-        
+
+
         if task_key not in self._locks:
             self._locks[task_key] = asyncio.Lock()
 
         lock = self._locks[task_key]
 
-        
+
         async with lock:
-            
+
             if task_key in self._task_instances:
                 return self._task_instances[task_key]
 
-            
-            try:
-                model_class = apps.get_model('streaming', model_name)
-                task_instance = await asyncio.to_thread(
-                    model_class.objects.get, pk=task_id
-                )
 
-                
+            try:
+                model_class = apps.get_model(app_name, model_name)
+                task_instance = await model_class.objects.aget(pk=task_id)
+
+
                 self._task_instances[task_key] = task_instance
 
-                
+
                 if not task_instance.completed_at:
-                    await self.start_task(task_instance, model_name)
+                    await self.start_task(task_instance, app_name, model_name)
 
                 return task_instance
             except Exception:
                 return None
 
-    def is_task_running(self, model_name: str, task_id: int) -> bool:
-        
-        task_key = self.get_task_key(model_name, task_id)
+    def is_task_running(self, app_name: str, model_name: str, task_id: int) -> bool:
+
+        task_key = self.get_task_key(app_name, model_name, task_id)
         return task_key in self._tasks and not self._tasks[task_key].done()
 
 

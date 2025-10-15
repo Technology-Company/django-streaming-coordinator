@@ -14,17 +14,18 @@ from streaming.coordinator import coordinator
 async def stream_handler(request):
     path_parts = request.path.strip('/').split('/')
 
-    if len(path_parts) != 3 or path_parts[0] != 'stream':
+    if len(path_parts) != 4 or path_parts[0] != 'stream':
         return 404, {}, "Not Found"
 
-    model_name = path_parts[1]
+    app_name = path_parts[1]
+    model_name = path_parts[2]
     try:
-        task_id = int(path_parts[2])
+        task_id = int(path_parts[3])
     except ValueError:
         return 400, {}, "Invalid task ID"
 
 
-    task_instance = await coordinator.get_task_instance(model_name, task_id)
+    task_instance = await coordinator.get_task_instance(app_name, model_name, task_id)
 
     if task_instance is None:
         return 404, {}, "Task not found"
@@ -59,8 +60,9 @@ async def stream_handler(request):
                 event_type = event_data.get('type', 'message')
                 data = event_data.get('data', {})
 
-                
+
                 data['_task_id'] = task_id
+                data['_app'] = app_name
                 data['_model'] = model_name
                 data['_timestamp'] = event_data.get('timestamp')
 

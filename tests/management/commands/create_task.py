@@ -1,6 +1,6 @@
 import asyncio
 from django.core.management.base import BaseCommand
-from streaming.models import ExampleTask, ContinueTask
+from tests.models import ExampleTask, ContinueTask
 from streaming.coordinator import coordinator
 
 
@@ -32,17 +32,18 @@ class Command(BaseCommand):
         message = options['message']
         no_start = options['no_start']
 
-        
+
         asyncio.run(self._create_task(task_type, message, no_start))
 
     async def _create_task(self, task_type, message, no_start):
-        
+
 
         if task_type == 'example':
             if message is None:
                 message = "Task created via management command"
 
             task = await ExampleTask.objects.acreate(message=message)
+            app_name = 'tests'
             model_name = 'ExampleTask'
 
             self.stdout.write(self.style.SUCCESS(f'Created ExampleTask with ID: {task.pk}'))
@@ -56,6 +57,7 @@ class Command(BaseCommand):
                 message=message,
                 continue_field=False
             )
+            app_name = 'tests'
             model_name = 'ContinueTask'
 
             self.stdout.write(self.style.SUCCESS(f'Created ContinueTask with ID: {task.pk}'))
@@ -65,15 +67,13 @@ class Command(BaseCommand):
                 f'\n  To continue the task, run:'
             ))
             self.stdout.write(self.style.WARNING(
-                f'    poetry run python manage.py shell -c "from streaming.models import ContinueTask; import asyncio; asyncio.run(ContinueTask.objects.filter(pk={task.pk}).aupdate(continue_field=True))"'
+                f'    poetry run python manage.py shell -c "from tests.models import ContinueTask; import asyncio; asyncio.run(ContinueTask.objects.filter(pk={task.pk}).aupdate(continue_field=True))"'
             ))
 
         if not no_start:
             self.stdout.write('\nStarting task...')
-            await coordinator.start_task(task, model_name)
+            await coordinator.start_task(task, app_name, model_name)
             self.stdout.write(self.style.SUCCESS('✓ Task started'))
 
         self.stdout.write(f'\nConnect to task stream:')
-        self.stdout.write(f'  curl http://127.0.0.1:8888/stream/{model_name}/{task.pk}')
-        self.stdout.write(f'\nOr with httpx-sse:')
-        self.stdout.write(f'  poetry run python -c "import asyncio; from streaming.models import {model_name}; from streaming.coordinator import coordinator; asyncio.run(coordinator.get_task_instance(\'{model_name}\', {task.pk}))"')
+        self.stdout.write(f'  curl http://127.0.0.1:8888/stream/{app_name}/{model_name}/{task.pk}')

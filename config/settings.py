@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 
@@ -38,6 +39,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'streaming',
+    'tests',
 ]
 
 MIDDLEWARE = [
@@ -73,10 +75,18 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 
 
+# Check if we should use test database (for subprocess servers in tests)
+TEST_DB_NAME = os.environ.get('TEST_DATABASE_NAME')
+DB_NAME = TEST_DB_NAME if TEST_DB_NAME else BASE_DIR / 'db.sqlite3'
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': DB_NAME,
+        'TEST': {
+            # Use file-based test DB so subprocess server can access same data
+            'NAME': BASE_DIR / 'test_db.sqlite3',
+        }
     }
 }
 

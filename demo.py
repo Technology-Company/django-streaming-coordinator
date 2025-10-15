@@ -6,7 +6,7 @@ import asyncio
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 django.setup()
 
-from streaming.models import ExampleTask
+from tests.models import ExampleTask
 from streaming.coordinator import coordinator
 
 
@@ -29,9 +29,9 @@ async def main():
     await task.add_client(event_queue)
     print("   ✓ Client connected")
 
-    
+
     print("\n3. Starting task...")
-    await coordinator.start_task(task, 'ExampleTask')
+    await coordinator.start_task(task, 'tests', 'ExampleTask')
     print("   ✓ Task started")
 
     print("\n4. Receiving events:")
@@ -83,7 +83,7 @@ async def main():
     print("Demo completed successfully!")
     print("\nTo test with HTTP:")
     print(f"  1. Start server: poetry run python manage.py runserver_stream --port 8888")
-    print(f"  2. Connect: curl http://127.0.0.1:8888/stream/ExampleTask/{task.pk}")
+    print(f"  2. Connect: curl http://127.0.0.1:8888/stream/tests/ExampleTask/{task.pk}")
     print("=" * 60)
 
 
