@@ -1,6 +1,6 @@
 [project]
 name = "django-streaming-coordinator"
-version = "0.1.0"
+version = "0.1.1"
 description = "A Django-based system for managing long-running tasks with Server-Sent Events (SSE) streaming"
 authors = [
     {name = "Justus Hämäläinen", email = "justushamalainen@gmail.com"}
