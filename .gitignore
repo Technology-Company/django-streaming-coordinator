@@ -33,9 +33,6 @@ db.sqlite3-journal
 /media
 /staticfiles
 
-# Poetry
-poetry.lock
-
 # IDE
 .vscode/
 .idea/
