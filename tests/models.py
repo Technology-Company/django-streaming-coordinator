@@ -1,7 +1,10 @@
 import asyncio
 import httpx
+import logging
 from django.db import models
 from streaming.models import StreamTask
+
+logger = logging.getLogger('streaming.tasks')
 
 
 class ExampleTask(StreamTask):
@@ -129,30 +132,28 @@ class HttpxFetchTask(StreamTask):
     url = models.URLField(default="https://httpbin.org/json")
 
     async def process(self):
+        logger.info(f"Task {self.pk}: Starting HTTP fetch from {self.url}")
         await self.send_event('start', {'url': self.url})
 
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
-                # Send progress event
+                logger.info(f"Task {self.pk}: Fetching data from {self.url}")
                 await self.send_event('progress', {
                     'status': 'fetching',
                     'message': f'Fetching data from {self.url}'
                 })
 
-                # Fetch the data
                 response = await client.get(self.url)
                 response.raise_for_status()
-
                 data = response.json()
 
-                # Send progress with data info
+                logger.info(f"Task {self.pk}: Data fetched (status: {response.status_code})")
                 await self.send_event('progress', {
                     'status': 'fetched',
                     'status_code': response.status_code,
                     'data_size': len(str(data)),
                 })
 
-                # Complete
                 await self.send_event('complete', {
                     'message': 'Data fetched successfully',
                     'url': self.url
@@ -161,6 +162,7 @@ class HttpxFetchTask(StreamTask):
                 return data
 
         except httpx.HTTPError as e:
+            logger.error(f"Task {self.pk}: HTTP error: {str(e)}", exc_info=True)
             await self.send_event('error', {
                 'message': f'HTTP error: {str(e)}',
                 'url': self.url
