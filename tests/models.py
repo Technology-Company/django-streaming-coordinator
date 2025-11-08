@@ -161,6 +161,13 @@ class HttpxFetchTask(StreamTask):
 
                 return data
 
+        except asyncio.CancelledError:
+            logger.info(f"Task {self.pk}: HTTP fetch cancelled")
+            await self.send_event('cancelled', {
+                'message': 'Fetch cancelled',
+                'url': self.url
+            })
+            raise
         except httpx.HTTPError as e:
             logger.error(f"Task {self.pk}: HTTP error: {str(e)}", exc_info=True)
             await self.send_event('error', {
