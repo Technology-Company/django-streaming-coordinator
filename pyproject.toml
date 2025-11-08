@@ -47,3 +47,6 @@ streaming = [
     "management/commands/*.py",
 ]
 
+[tool.poetry]
+package-mode = false
+
