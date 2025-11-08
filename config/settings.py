@@ -10,16 +10,11 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
-import logging.handlers
 import os
 from pathlib import Path
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-
-# Ensure logs directory exists
-LOGS_DIR = BASE_DIR / 'logs'
-LOGS_DIR.mkdir(exist_ok=True)
 
 
 
@@ -143,46 +138,30 @@ LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'formatters': {
-        'verbose': {
-            'format': '{levelname} {asctime} {name} {module} {funcName} {message}',
+        'simple': {
+            'format': '{levelname} {asctime} {name} {message}',
             'style': '{',
         },
     },
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
-            'formatter': 'verbose',
-        },
-        'file': {
-            'class': 'logging.handlers.RotatingFileHandler',
-            'filename': LOGS_DIR / 'streaming.log',
-            'formatter': 'verbose',
-            'maxBytes': 10 * 1024 * 1024,  # 10MB per file
-            'backupCount': 5,  # Keep 5 backups
-            'encoding': 'utf-8',
-        },
-        'task_file': {
-            'class': 'logging.handlers.RotatingFileHandler',
-            'filename': LOGS_DIR / 'tasks.log',
-            'formatter': 'verbose',
-            'maxBytes': 10 * 1024 * 1024,  # 10MB per file
-            'backupCount': 10,  # Keep 10 backups
-            'encoding': 'utf-8',
+            'formatter': 'simple',
         },
     },
     'loggers': {
         'streaming': {
-            'handlers': ['console', 'file'],
+            'handlers': ['console'],
             'level': 'INFO',
             'propagate': False,
         },
         'streaming.coordinator': {
-            'handlers': ['console', 'task_file'],
+            'handlers': ['console'],
             'level': 'INFO',
             'propagate': False,
         },
         'streaming.tasks': {
-            'handlers': ['console', 'task_file'],
+            'handlers': ['console'],
             'level': 'INFO',
             'propagate': False,
         },
