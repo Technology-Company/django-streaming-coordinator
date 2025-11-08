@@ -129,11 +129,13 @@ class HttpxFetchTask(StreamTask):
     url = models.URLField(default="https://httpbin.org/json")
 
     async def process(self):
+        await self.log('info', f'Starting HTTP fetch from {self.url}', url=self.url)
         await self.send_event('start', {'url': self.url})
 
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 # Send progress event
+                await self.log('info', 'Fetching data...', status='fetching')
                 await self.send_event('progress', {
                     'status': 'fetching',
                     'message': f'Fetching data from {self.url}'
@@ -146,6 +148,7 @@ class HttpxFetchTask(StreamTask):
                 data = response.json()
 
                 # Send progress with data info
+                await self.log('info', f'Data fetched successfully (status: {response.status_code}, size: {len(str(data))} bytes)')
                 await self.send_event('progress', {
                     'status': 'fetched',
                     'status_code': response.status_code,
@@ -153,6 +156,7 @@ class HttpxFetchTask(StreamTask):
                 })
 
                 # Complete
+                await self.log('info', 'HTTP fetch completed successfully')
                 await self.send_event('complete', {
                     'message': 'Data fetched successfully',
                     'url': self.url
@@ -161,6 +165,7 @@ class HttpxFetchTask(StreamTask):
                 return data
 
         except httpx.HTTPError as e:
+            await self.log('error', f'HTTP error occurred: {str(e)}', url=self.url, error_type=type(e).__name__)
             await self.send_event('error', {
                 'message': f'HTTP error: {str(e)}',
                 'url': self.url

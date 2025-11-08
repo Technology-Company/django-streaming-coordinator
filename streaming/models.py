@@ -1,9 +1,12 @@
 import asyncio
 import json
+import logging
 from abc import ABCMeta, abstractmethod
 from typing import AsyncGenerator, Generator, Any
 from django.db import models
 from django.utils import timezone
+
+logger = logging.getLogger('streaming.tasks')
 
 
 class StreamTaskMeta(ABCMeta, type(models.Model)):
@@ -32,46 +35,57 @@ class StreamTask(models.Model, metaclass=StreamTaskMeta):
             'timestamp': timezone.now().isoformat()
         }
 
-        
-        self._latest_data = event_data
+        logger.info(f"Task {self.pk} sending event '{event_type}' to {len(self._clients)} client(s): {data}")
 
-        
+        # Only cache non-log events as latest data (log events are transient)
+        if event_type != 'log':
+            self._latest_data = event_data
+
+
         if not self._clients:
+            logger.debug(f"Task {self.pk} has no connected clients, event cached only")
             return
 
-        
+
         async def send_to_client(queue):
-            
+
             try:
                 await queue.put(event_data)
                 return (queue, None)
             except Exception as e:
+                logger.error(f"Task {self.pk} failed to send event to client: {type(e).__name__}: {str(e)}")
                 return (queue, e)
 
-        
-        
+
+
         results = await asyncio.gather(*[send_to_client(q) for q in self._clients])
 
-        
+
+        failed_clients = 0
         for queue, error in results:
             if error is not None:
+                failed_clients += 1
                 self._clients.discard(queue)
 
-    async def add_client(self, queue):
-        
-        self._clients.add(queue)
-        latest = self._latest_data  
+        if failed_clients > 0:
+            logger.warning(f"Task {self.pk} removed {failed_clients} failed client(s), {len(self._clients)} remaining")
 
-        
+    async def add_client(self, queue):
+        logger.info(f"Task {self.pk} adding client (total: {len(self._clients) + 1})")
+        self._clients.add(queue)
+        latest = self._latest_data
+
+
         if latest:
             try:
+                logger.debug(f"Task {self.pk} sending latest cached event to new client")
                 await queue.put(latest)
-            except Exception:
-                
+            except Exception as e:
+                logger.error(f"Task {self.pk} failed to send cached event to new client: {type(e).__name__}: {str(e)}")
                 self._clients.discard(queue)
 
     async def remove_client(self, queue):
-        
+        logger.info(f"Task {self.pk} removing client (total: {len(self._clients) - 1})")
         self._clients.discard(queue)
 
     @abstractmethod
@@ -79,10 +93,30 @@ class StreamTask(models.Model, metaclass=StreamTaskMeta):
         pass
 
     async def mark_completed(self, final_value=None):
-
+        logger.info(f"Task {self.pk} marking as completed with final value: {final_value}")
         self.completed_at = timezone.now()
         self.final_value = final_value
         await self.asave(update_fields=['completed_at', 'final_value', 'updated_at'])
+
+    async def log(self, level: str, message: str, **extra_data):
+        """
+        Log a message both to the logging system and send it as an event to clients.
+
+        Args:
+            level: Log level ('debug', 'info', 'warning', 'error', 'critical')
+            message: The log message
+            **extra_data: Additional data to include in the event
+        """
+        # Log to the logging system
+        log_method = getattr(logger, level.lower(), logger.info)
+        log_method(f"Task {self.pk}: {message}")
+
+        # Send as event to clients
+        event_data = {'message': message, 'level': level}
+        if extra_data:
+            event_data.update(extra_data)
+
+        await self.send_event('log', event_data)
 
     async def process_generator(self, generator: AsyncGenerator[dict, None]) -> Any:
         """

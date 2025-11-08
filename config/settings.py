@@ -131,3 +131,53 @@ STATIC_URL = 'static/'
 
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+# Logging configuration
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {name} {module} {funcName} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {asctime} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+        'file': {
+            'class': 'logging.FileHandler',
+            'filename': BASE_DIR / 'logs' / 'streaming.log',
+            'formatter': 'verbose',
+        },
+        'task_file': {
+            'class': 'logging.FileHandler',
+            'filename': BASE_DIR / 'logs' / 'tasks.log',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'streaming': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'streaming.coordinator': {
+            'handlers': ['console', 'task_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'streaming.tasks': {
+            'handlers': ['console', 'task_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
