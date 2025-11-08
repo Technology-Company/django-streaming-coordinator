@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-import traceback
 from abc import ABCMeta, abstractmethod
 from typing import AsyncGenerator, Generator, Any
 from django.db import models
@@ -54,10 +53,6 @@ class StreamTask(models.Model, metaclass=StreamTaskMeta):
                 await queue.put(event_data)
                 return (queue, None)
             except Exception as e:
-                # Print traceback for visibility
-                print(f"\nTask {self.pk} failed to send event to client:", flush=True)
-                traceback.print_exc()
-
                 logger.error(f"Task {self.pk} failed to send event to client: {type(e).__name__}: {str(e)}")
                 return (queue, e)
 
@@ -86,10 +81,6 @@ class StreamTask(models.Model, metaclass=StreamTaskMeta):
                 logger.debug(f"Task {self.pk} sending latest cached event to new client")
                 await queue.put(latest)
             except Exception as e:
-                # Print traceback for visibility
-                print(f"\nTask {self.pk} failed to send cached event to new client:", flush=True)
-                traceback.print_exc()
-
                 logger.error(f"Task {self.pk} failed to send cached event to new client: {type(e).__name__}: {str(e)}")
                 self._clients.discard(queue)
 

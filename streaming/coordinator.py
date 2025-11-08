@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import traceback
 from typing import Dict, Optional
 from django.apps import apps
 
@@ -63,18 +62,10 @@ class TaskCoordinator:
             logger.info(f"Task {task_key} completed successfully with value: {final_value}")
             await task_instance.mark_completed(final_value=final_value)
         except Exception as e:
-            # Always print traceback to stderr (visible even without logging)
-            print(f"\n{'='*60}\nTask {task_key} failed:\n{'='*60}", flush=True)
-            traceback.print_exc()
-            print('='*60, flush=True)
-
-            # Also log it if logging is configured
             logger.error(
                 f"Task {task_key} failed with {type(e).__name__}: {str(e)}",
                 exc_info=True
             )
-
-            # Send error event to clients
             await task_instance.send_event('error', {
                 'message': str(e),
                 'error_type': type(e).__name__
@@ -146,11 +137,6 @@ class TaskCoordinator:
 
                 return task_instance
             except Exception as e:
-                # Print traceback for visibility
-                print(f"\n{'='*60}\nFailed to load task {task_key}:\n{'='*60}", flush=True)
-                traceback.print_exc()
-                print('='*60, flush=True)
-
                 logger.error(f"Failed to load task {task_key}: {type(e).__name__}: {str(e)}", exc_info=True)
                 return None
 
