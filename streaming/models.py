@@ -35,11 +35,16 @@ class StreamTask(models.Model, metaclass=StreamTaskMeta):
             'timestamp': timezone.now().isoformat()
         }
 
-        logger.info(f"Task {self.pk} sending event '{event_type}' to {len(self._clients)} client(s): {data}")
+        # Log at DEBUG level to avoid excessive verbosity
+        # Use INFO only for significant events (error, complete)
+        log_level = logging.INFO if event_type in ('error', 'complete') else logging.DEBUG
+        logger.log(
+            log_level,
+            f"Task {self.pk} sending '{event_type}' event to {len(self._clients)} client(s)"
+        )
 
-        # Only cache non-log events as latest data (log events are transient)
-        if event_type != 'log':
-            self._latest_data = event_data
+        # Cache latest data for new clients
+        self._latest_data = event_data
 
 
         if not self._clients:
@@ -97,26 +102,6 @@ class StreamTask(models.Model, metaclass=StreamTaskMeta):
         self.completed_at = timezone.now()
         self.final_value = final_value
         await self.asave(update_fields=['completed_at', 'final_value', 'updated_at'])
-
-    async def log(self, level: str, message: str, **extra_data):
-        """
-        Log a message both to the logging system and send it as an event to clients.
-
-        Args:
-            level: Log level ('debug', 'info', 'warning', 'error', 'critical')
-            message: The log message
-            **extra_data: Additional data to include in the event
-        """
-        # Log to the logging system
-        log_method = getattr(logger, level.lower(), logger.info)
-        log_method(f"Task {self.pk}: {message}")
-
-        # Send as event to clients
-        event_data = {'message': message, 'level': level}
-        if extra_data:
-            event_data.update(extra_data)
-
-        await self.send_event('log', event_data)
 
     async def process_generator(self, generator: AsyncGenerator[dict, None]) -> Any:
         """
