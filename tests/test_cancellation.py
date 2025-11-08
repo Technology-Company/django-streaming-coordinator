@@ -137,6 +137,9 @@ class TaskCancellationTests(TransactionTestCase):
         task_key = coordinator.get_task_key('tests', 'ExampleTask', task.pk)
         assert task_key in coordinator._tasks
 
+        # Give task a chance to start executing
+        await asyncio.sleep(0.01)
+
         # Cancel task
         running_task = coordinator._tasks[task_key]
         running_task.cancel()
@@ -182,6 +185,9 @@ class TaskCancellationAPITests(TransactionTestCase):
 
         # Start task
         await coordinator.start_task(task, 'tests', 'ExampleTask')
+
+        # Give task a chance to start
+        await asyncio.sleep(0.01)
 
         # Task is running
         assert coordinator.is_task_running('tests', 'ExampleTask', task.pk)

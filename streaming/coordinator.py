@@ -61,6 +61,13 @@ class TaskCoordinator:
             final_value = await task_instance.process()
             logger.info(f"Task {task_key} completed successfully with value: {final_value}")
             await task_instance.mark_completed(final_value=final_value)
+        except asyncio.CancelledError:
+            logger.info(f"Task {task_key} was cancelled")
+            await task_instance.send_event('cancelled', {
+                'message': 'Task was cancelled',
+                'reason': 'external_cancellation'
+            })
+            raise  # Critical: must re-raise CancelledError
         except Exception as e:
             logger.error(
                 f"Task {task_key} failed with {type(e).__name__}: {str(e)}",
@@ -144,6 +151,33 @@ class TaskCoordinator:
 
         task_key = self.get_task_key(app_name, model_name, task_id)
         return task_key in self._tasks and not self._tasks[task_key].done()
+
+    async def cancel_task(self, app_name: str, model_name: str, task_id: int) -> bool:
+        """
+        Cancel a running task.
+
+        Args:
+            app_name: The name of the app
+            model_name: The name of the model
+            task_id: The task ID
+
+        Returns:
+            True if task was cancelled, False if task wasn't running
+        """
+        task_key = self.get_task_key(app_name, model_name, task_id)
+
+        if task_key not in self._tasks:
+            logger.warning(f"Cannot cancel task {task_key} - not found")
+            return False
+
+        task = self._tasks[task_key]
+        if task.done():
+            logger.info(f"Task {task_key} already completed, cannot cancel")
+            return False
+
+        logger.info(f"Cancelling task {task_key}")
+        task.cancel()
+        return True
 
 
 
