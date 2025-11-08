@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import traceback
 import django
 
 
@@ -84,6 +85,11 @@ async def stream_handler(request):
                     break
 
         except Exception as e:
+            # Always print traceback to stderr
+            print(f"\n{'='*60}\nError in event stream for task {task_id}:\n{'='*60}", flush=True)
+            traceback.print_exc()
+            print('='*60, flush=True)
+
             logger.error(f"Error in event stream for task {task_id}: {type(e).__name__}: {str(e)}", exc_info=True)
         finally:
             logger.info(f"Client disconnected from task {app_name}/{model_name}/{task_id}")
