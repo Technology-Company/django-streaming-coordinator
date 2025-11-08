@@ -128,55 +128,32 @@ class SyncGeneratorTask(StreamTask):
 
 
 class HttpxFetchTask(StreamTask):
-    """Example task using httpx to fetch data from an API.
-
-    This demonstrates proper separation of concerns:
-    - Server-side logging uses logger.info/error for ops/debugging
-    - Client events use send_event() for user-facing progress updates
-    """
+    """Example task using httpx to fetch data from an API."""
     url = models.URLField(default="https://httpbin.org/json")
 
     async def process(self):
-        # Server-side logging (for developers/ops)
         logger.info(f"Task {self.pk}: Starting HTTP fetch from {self.url}")
-
-        # Client event (for end users)
         await self.send_event('start', {'url': self.url})
 
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
-                # Server-side log
                 logger.info(f"Task {self.pk}: Fetching data from {self.url}")
-
-                # Client event
                 await self.send_event('progress', {
                     'status': 'fetching',
                     'message': f'Fetching data from {self.url}'
                 })
 
-                # Fetch the data
                 response = await client.get(self.url)
                 response.raise_for_status()
-
                 data = response.json()
 
-                # Server-side log with details
-                logger.info(
-                    f"Task {self.pk}: Data fetched successfully "
-                    f"(status: {response.status_code}, size: {len(str(data))} bytes)"
-                )
-
-                # Client event
+                logger.info(f"Task {self.pk}: Data fetched (status: {response.status_code})")
                 await self.send_event('progress', {
                     'status': 'fetched',
                     'status_code': response.status_code,
                     'data_size': len(str(data)),
                 })
 
-                # Server-side log
-                logger.info(f"Task {self.pk}: HTTP fetch completed successfully")
-
-                # Client event
                 await self.send_event('complete', {
                     'message': 'Data fetched successfully',
                     'url': self.url
@@ -185,14 +162,7 @@ class HttpxFetchTask(StreamTask):
                 return data
 
         except httpx.HTTPError as e:
-            # Server-side error log with full context
-            logger.error(
-                f"Task {self.pk}: HTTP error occurred: {type(e).__name__}: {str(e)}",
-                exc_info=True,
-                extra={'url': self.url, 'error_type': type(e).__name__}
-            )
-
-            # Client error event
+            logger.error(f"Task {self.pk}: HTTP error: {str(e)}", exc_info=True)
             await self.send_event('error', {
                 'message': f'HTTP error: {str(e)}',
                 'url': self.url

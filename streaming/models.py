@@ -35,13 +35,8 @@ class StreamTask(models.Model, metaclass=StreamTaskMeta):
             'timestamp': timezone.now().isoformat()
         }
 
-        # Log at DEBUG level to avoid excessive verbosity
-        # Use INFO only for significant events (error, complete)
-        log_level = logging.INFO if event_type in ('error', 'complete') else logging.DEBUG
-        logger.log(
-            log_level,
-            f"Task {self.pk} sending '{event_type}' event to {len(self._clients)} client(s)"
-        )
+        # Log at DEBUG level to avoid verbosity (important events logged elsewhere)
+        logger.debug(f"Task {self.pk} sending '{event_type}' event to {len(self._clients)} client(s)")
 
         # Cache latest data for new clients
         self._latest_data = event_data

@@ -10,15 +10,12 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
-import os
 import logging.handlers
+import os
 from pathlib import Path
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-
-# Environment configuration
-ENV = os.environ.get('DJANGO_ENV', 'development')
 
 # Ensure logs directory exists
 LOGS_DIR = BASE_DIR / 'logs'
@@ -142,20 +139,12 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
 # Logging configuration
-# Environment-specific log levels
-LOG_LEVEL = 'DEBUG' if ENV == 'development' else 'INFO'
-ENABLE_CONSOLE_LOGGING = ENV in ('development', 'testing')
-
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'formatters': {
         'verbose': {
             'format': '{levelname} {asctime} {name} {module} {funcName} {message}',
-            'style': '{',
-        },
-        'simple': {
-            'format': '{levelname} {asctime} {message}',
             'style': '{',
         },
     },
@@ -169,7 +158,7 @@ LOGGING = {
             'filename': LOGS_DIR / 'streaming.log',
             'formatter': 'verbose',
             'maxBytes': 10 * 1024 * 1024,  # 10MB per file
-            'backupCount': 5,  # Keep 5 backup files (50MB total)
+            'backupCount': 5,  # Keep 5 backups
             'encoding': 'utf-8',
         },
         'task_file': {
@@ -177,24 +166,24 @@ LOGGING = {
             'filename': LOGS_DIR / 'tasks.log',
             'formatter': 'verbose',
             'maxBytes': 10 * 1024 * 1024,  # 10MB per file
-            'backupCount': 10,  # Keep 10 backups (100MB total for busy task logs)
+            'backupCount': 10,  # Keep 10 backups
             'encoding': 'utf-8',
         },
     },
     'loggers': {
         'streaming': {
-            'handlers': ['console', 'file'] if ENABLE_CONSOLE_LOGGING else ['file'],
-            'level': LOG_LEVEL,
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
             'propagate': False,
         },
         'streaming.coordinator': {
-            'handlers': ['console', 'task_file'] if ENABLE_CONSOLE_LOGGING else ['task_file'],
-            'level': LOG_LEVEL,
+            'handlers': ['console', 'task_file'],
+            'level': 'INFO',
             'propagate': False,
         },
         'streaming.tasks': {
-            'handlers': ['console', 'task_file'] if ENABLE_CONSOLE_LOGGING else ['task_file'],
-            'level': LOG_LEVEL,
+            'handlers': ['console', 'task_file'],
+            'level': 'INFO',
             'propagate': False,
         },
     },
